@@ -4,25 +4,25 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
-			"os"
-	"strings"
-	"io/ioutil"
+	"os"
 	"path/filepath"
-	)
+	"strings"
+)
 
 func main() {
 	var sendReleases = false
 	var sendDebugs = false
 	var sendEnterprises = false
 
-	for _ , arg := range os.Args {
+	for _, arg := range os.Args {
 		if arg == "-r" {
 			sendReleases = true
-		}else if arg == "-e" {
+		} else if arg == "-e" {
 			sendEnterprises = true
-		}else if arg == "-d" {
+		} else if arg == "-d" {
 			sendDebugs = true
 		}
 	}
@@ -35,30 +35,27 @@ func main() {
 
 	client := &http.Client{}
 
-	apksPath , err := os.Open("app/build/outputs/apk")
+	apksPath, err := os.Open("app/build/outputs/apk")
 
 	if err != nil {
 		panic("Apk folder not found! in 'app/build/outputs/apk'")
 	}
 
+	var debugPath, releasesPath, enterprisesPath string
 
-	var arm64Path,armv7Path,x64Path,x86Path string
-
-	archs , err := ioutil.ReadDir(apksPath.Name())
+	buildTypesPaths, err := ioutil.ReadDir(apksPath.Name())
 
 	if err != nil {
 		panic(err)
 	}
 
-	for _, f := range archs {
-		if f.Name() == "arm64" {
-			arm64Path = apksPath.Name() + "/" + f.Name()
-		}else if f.Name() == "armv7" {
-			armv7Path = apksPath.Name() + "/" + f.Name()
-		}else if f.Name() == "x64" {
-			x64Path = apksPath.Name() + "/" + f.Name()
-		}else if f.Name() == "x86" {
-			x86Path = apksPath.Name() + "/" + f.Name()
+	for _, f := range buildTypesPaths {
+		if f.Name() == "debug" {
+			debugPath = apksPath.Name() + "/" + f.Name()
+		} else if f.Name() == "release" {
+			releasesPath = apksPath.Name() + "/" + f.Name()
+		} else if f.Name() == "enterprise" {
+			enterprisesPath = apksPath.Name() + "/" + f.Name()
 		}
 	}
 
@@ -67,67 +64,109 @@ func main() {
 	var enterprises []string
 
 	i := 0
-	for i <= 4 {
+	for i < 3 {
 		var currentPath string
+		var currentName string
 
 		if i == 0 {
-			currentPath = arm64Path
-			//name = "Arm64"
-		}else if i == 1 {
-			currentPath = armv7Path
-			//name = "Armv7"
-		}else if i == 2 {
-			currentPath = x64Path
-			//name = "X64"
-		}else if i == 3 {
-			currentPath = x86Path
-			//name = "X86"
+			if len(debugPath) == 0 {
+				i++
+				continue
+			}
+			currentPath = debugPath
+			currentName = "debug"
+		} else if i == 1 {
+			if len(releasesPath) == 0 {
+				i++
+				continue
+			}
+			currentPath = releasesPath
+			currentName = "release"
+		} else if i == 2 {
+			if len(enterprisesPath) == 0 {
+				i++
+				continue
+			}
+			currentPath = enterprisesPath
+			currentName = "enterprise"
 		}
 
-		var lastRelease string
-		var lastDebug string
-		var lastEnterprise string
+		var lastArmV8 string
+		var lastArmV7 string
+		var lastX86 string
+		var lastX86_64 string
 
-		err = filepath.Walk(currentPath, func (path string, f os.FileInfo, err error) error {
-			if strings.HasPrefix(path,currentPath + "/release") && strings.HasSuffix(f.Name(), "apk") {
-				lastRelease = path
-			}else if strings.HasPrefix(path,currentPath + "/debug") && strings.HasSuffix(f.Name(), "apk") {
-				lastDebug = path
-			}else if strings.HasPrefix(path,currentPath + "/enterprise") && strings.HasSuffix(f.Name(), "apk") {
-				lastEnterprise = path
+		err = filepath.Walk(currentPath, func(path string, f os.FileInfo, err error) error {
+			if strings.HasPrefix(path, currentPath) && strings.HasSuffix(f.Name(), "arm64-v8a-"+currentName+".apk") {
+				lastArmV8 = path
+			} else if strings.HasPrefix(path, currentPath) && strings.HasSuffix(f.Name(), "armeabi-v7a-"+currentName+".apk") {
+				lastArmV7 = path
+			} else if strings.HasPrefix(path, currentPath) && strings.HasSuffix(f.Name(), "x86_64-"+currentName+".apk") {
+				lastX86_64 = path
+			}else if strings.HasPrefix(path, currentPath) && strings.HasSuffix(f.Name(), "x86-"+currentName+".apk") {
+				lastX86 = path
 			}
 
 			return nil
 		})
 
-		if len(lastRelease) != 0 {
-			releases = append(releases, lastRelease)
+		if len(lastArmV8) != 0 {
+			switch i {
+			case 0 :
+				debugs = append(debugs, lastArmV8)
+			case 1 :
+				releases = append(releases,lastArmV8)
+			case 2 :
+				enterprises = append(enterprises,lastArmV8)
+			}
 		}
 
-		if len(lastDebug) != 0 {
-			debugs = append(debugs, lastDebug)
+		if len(lastArmV7) != 0 {
+			switch i {
+			case 0 :
+				debugs = append(debugs, lastArmV7)
+			case 1 :
+				releases = append(releases,lastArmV7)
+			case 2 :
+				enterprises = append(enterprises,lastArmV7)
+			}
 		}
 
-		if len(lastEnterprise) != 0 {
-			enterprises = append(enterprises, lastEnterprise)
+		if len(lastX86) != 0 {
+			switch i {
+			case 0 :
+				debugs = append(debugs, lastX86)
+			case 1 :
+				releases = append(releases,lastX86)
+			case 2 :
+				enterprises = append(enterprises,lastX86)
+			}
+		}
+
+		if len(lastX86_64) != 0 {
+			switch i {
+			case 0 :
+				debugs = append(debugs, lastX86_64)
+			case 1 :
+				releases = append(releases,lastX86_64)
+			case 2 :
+				enterprises = append(enterprises,lastX86_64)
+			}
 		}
 
 		if err != nil {
 			panic(err)
 		}
 
-
-		i = i + 1
+		i++
 	}
-
-
 
 	if sendReleases {
 		print("Uploading Releases started...")
-		for _ , path := range releases {
+		for _, path := range releases {
 			print("\n" + "Uploading " + path + " ...")
 
-			file , err := os.Open(path)
+			file, err := os.Open(path)
 
 			if err != nil {
 				panic(err)
@@ -135,7 +174,7 @@ func main() {
 
 			values := map[string]io.Reader{
 				"files[]":  file, // lets assume its this file
-				"path": strings.NewReader("/Releases/River/Android/Releases/"),
+				"path":     strings.NewReader("/Releases/River/Android/Releases/"),
 				"username": strings.NewReader("ireza"),
 				"password": strings.NewReader("21506426"),
 			}
@@ -152,10 +191,10 @@ func main() {
 
 	if sendDebugs {
 		print("\n" + "Uploading Debugs started...")
-		for _ , path := range debugs {
+		for _, path := range debugs {
 			print("\n" + "Uploading " + path + " ...")
 
-			file , err := os.Open(path)
+			file, err := os.Open(path)
 
 			if err != nil {
 				panic(err)
@@ -163,7 +202,7 @@ func main() {
 
 			values := map[string]io.Reader{
 				"files[]":  file, // lets assume its this file
-				"path": strings.NewReader("/Releases/River/Android/Debugs/"),
+				"path":     strings.NewReader("/Releases/River/Android/Debugs/"),
 				"username": strings.NewReader("ireza"),
 				"password": strings.NewReader("21506426"),
 			}
@@ -180,10 +219,10 @@ func main() {
 
 	if sendEnterprises {
 		print("\n" + "Uploading Enterprises started...")
-		for _ , path := range enterprises {
+		for _, path := range enterprises {
 			print("\n" + "Uploading " + path + " ...")
 
-			file , err := os.Open(path)
+			file, err := os.Open(path)
 
 			if err != nil {
 				panic(err)
@@ -191,7 +230,7 @@ func main() {
 
 			values := map[string]io.Reader{
 				"files[]":  file, // lets assume its this file
-				"path": strings.NewReader("/Releases/River/Android/Enterprises/"),
+				"path":     strings.NewReader("/Releases/River/Android/Enterprises/"),
 				"username": strings.NewReader("ireza"),
 				"password": strings.NewReader("21506426"),
 			}
@@ -256,4 +295,3 @@ func Upload(client *http.Client, url string, values map[string]io.Reader) (err e
 	}
 	return
 }
-
