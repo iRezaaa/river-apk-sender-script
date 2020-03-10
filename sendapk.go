@@ -174,7 +174,7 @@ func main() {
 
 			values := map[string]io.Reader{
 				"files[]":  file, // lets assume its this file
-				"path":     strings.NewReader("/Releases/River/Android/Releases/"),
+				"path":     strings.NewReader("/Releases/River/Android/Private/"),
 				"username": strings.NewReader("ireza"),
 				"password": strings.NewReader("21506426"),
 			}
